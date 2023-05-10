@@ -3,14 +3,29 @@ use proc_macro_error::emit_error;
 use quote::{quote, ToTokens};
 use syn::{
     parenthesized, parse::Parse, parse2, parse_macro_input, parse_quote, punctuated::Punctuated,
-    spanned::Spanned, token::Paren, Attribute, Expr, ExprLit, FnArg, Ident, ItemFn, Lit, Pat,
-    PatIdent, Path, ReturnType, Signature, Stmt, Token, Type, TypePath,
+    spanned::Spanned, token::Paren, Attribute, AttributeArgs, Expr, ExprLit, FnArg, Ident, ItemFn,
+    Lit, Meta, NestedMeta, Pat, PatIdent, Path, ReturnType, Signature, Stmt, Token, Type, TypePath,
 };
 
-pub(crate) fn r#impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub(crate) fn r#impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut fn_decl = parse_macro_input!(item as ItemFn);
 
-    let loader = Loader::from_item_fn(&mut fn_decl);
+    // Parse the attribute arguments as a list of key-value pairs.
+    let args = parse_macro_input!(attr as AttributeArgs);
+
+    let log_level_arg = args.iter().find_map(|arg| match arg {
+        NestedMeta::Meta(Meta::NameValue(name_value)) if name_value.path.is_ident("log_level") => {
+            match &name_value.lit {
+                Lit::Str(lit_str) => Some(lit_str.value()),
+                _ => panic!("invalid argument (allowed: log_level)"),
+            }
+        }
+        _ => None,
+    });
+
+    let log_level = log_level_arg.unwrap_or_else(|| "DEBUG".to_string());
+
+    let loader = Loader::from_item_fn(&mut fn_decl, log_level);
 
     let expanded = quote! {
         #[tokio::main]
@@ -30,6 +45,7 @@ struct Loader {
     fn_ident: Ident,
     fn_inputs: Vec<Input>,
     fn_return: TypePath,
+    log_level: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -90,7 +106,7 @@ impl Parse for BuilderOption {
 }
 
 impl Loader {
-    pub(crate) fn from_item_fn(item_fn: &mut ItemFn) -> Option<Self> {
+    pub(crate) fn from_item_fn(item_fn: &mut ItemFn, log_level: String) -> Option<Self> {
         let fn_ident = item_fn.sig.ident.clone();
 
         if fn_ident.to_string().as_str() == "main" {
@@ -131,6 +147,7 @@ impl Loader {
             fn_ident: fn_ident.clone(),
             fn_inputs: inputs,
             fn_return: type_path,
+            log_level: log_level,
         })
     }
 }
@@ -186,6 +203,16 @@ fn attribute_to_builder(pat_ident: &PatIdent, attrs: Vec<Attribute>) -> syn::Res
 impl ToTokens for Loader {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let fn_ident = &self.fn_ident;
+        let log_level = &self.log_level;
+
+        let log_level = match log_level.as_str() {
+            "TRACE" | "trace" => quote! { shuttle_runtime::tracing::Level::TRACE },
+            "DEBUG" | "debug" => quote! { shuttle_runtime::tracing::Level::DEBUG },
+            "INFO" | "info" => quote! { shuttle_runtime::tracing::Level::INFO },
+            "WARN" | "warn" => quote! { shuttle_runtime::tracing::Level::WARN },
+            "ERROR" | "error" => quote! { shuttle_runtime::tracing::Level::ERROR },
+            _ => panic!("Invalid log level"),
+        };
 
         let return_type = &self.fn_return;
 
@@ -260,10 +287,16 @@ impl ToTokens for Loader {
                 use shuttle_runtime::tracing_subscriber::prelude::*;
                 #extra_imports
 
-                let filter_layer =
-                    shuttle_runtime::tracing_subscriber::EnvFilter::try_from_default_env()
-                        .or_else(|_| shuttle_runtime::tracing_subscriber::EnvFilter::try_new("INFO"))
-                        .unwrap();
+                let log_level = #log_level;
+
+                let log_level: shuttle_runtime::tracing::Level = match log_level {
+                    Some(level) if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
+                    Some(level) => level,
+                    None => shuttle_runtime::tracing::Level::DEBUG,
+                };
+
+                let filter_layer = shuttle_runtime::tracing_subscriber::EnvFilter::from_default_env()
+                                      .add_directive(log_level.into());
 
                 shuttle_runtime::tracing_subscriber::registry()
                     .with(filter_layer)
@@ -300,7 +333,7 @@ mod tests {
             async fn simple() -> ShuttleAxum {}
         );
 
-        let actual = Loader::from_item_fn(&mut input).unwrap();
+        let actual = Loader::from_item_fn(&mut input, "DEBUG".to_string()).unwrap();
         let expected_ident: Ident = parse_quote!(simple);
 
         assert_eq!(actual.fn_ident, expected_ident);
@@ -313,6 +346,7 @@ mod tests {
             fn_ident: parse_quote!(simple),
             fn_inputs: Vec::new(),
             fn_return: parse_quote!(ShuttleSimple),
+            log_level: "DEBUG".to_string(),
         };
 
         let actual = quote!(#input);
@@ -348,7 +382,7 @@ mod tests {
             async fn complex(#[shuttle_shared_db::Postgres] pool: PgPool) -> ShuttleTide {}
         );
 
-        let actual = Loader::from_item_fn(&mut input).unwrap();
+        let actual = Loader::from_item_fn(&mut input, "DEBUG".to_string()).unwrap();
         let expected_ident: Ident = parse_quote!(complex);
         let expected_inputs: Vec<Input> = vec![Input {
             ident: parse_quote!(pool),
@@ -394,6 +428,7 @@ mod tests {
                 },
             ],
             fn_return: parse_quote!(ShuttleComplex),
+            log_level: "DEBUG".to_string(),
         };
 
         let actual = quote!(#input);
@@ -470,7 +505,7 @@ mod tests {
             }
         );
 
-        let actual = Loader::from_item_fn(&mut input).unwrap();
+        let actual = Loader::from_item_fn(&mut input, "DEBUG".to_string()).unwrap();
         let expected_ident: Ident = parse_quote!(complex);
         let mut expected_inputs: Vec<Input> = vec![Input {
             ident: parse_quote!(pool),
@@ -507,6 +542,7 @@ mod tests {
                 },
             }],
             fn_return: parse_quote!(ShuttleComplex),
+            log_level: "DEBUG".to_string(),
         };
 
         input.fn_inputs[0]
