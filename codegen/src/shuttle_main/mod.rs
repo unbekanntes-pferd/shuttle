@@ -290,9 +290,8 @@ impl ToTokens for Loader {
                 let log_level = #log_level;
 
                 let log_level: shuttle_runtime::tracing::Level = match log_level {
-                    Some(level) if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
-                    Some(level) => level,
-                    None => shuttle_runtime::tracing::Level::DEBUG,
+                    level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
+                    level => level,
                 };
 
                 let filter_layer = shuttle_runtime::tracing_subscriber::EnvFilter::from_default_env()
