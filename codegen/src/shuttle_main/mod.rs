@@ -147,7 +147,7 @@ impl Loader {
             fn_ident: fn_ident.clone(),
             fn_inputs: inputs,
             fn_return: type_path,
-            log_level: log_level,
+            log_level,
         })
     }
 }
@@ -345,7 +345,7 @@ mod tests {
             fn_ident: parse_quote!(simple),
             fn_inputs: Vec::new(),
             fn_return: parse_quote!(ShuttleSimple),
-            log_level: "DEBUG".to_string(),
+            log_level: "TRACE".to_string(),
         };
 
         let actual = quote!(#input);
@@ -358,10 +358,13 @@ mod tests {
                 use shuttle_runtime::Context;
                 use shuttle_runtime::tracing_subscriber::prelude::*;
 
-                let filter_layer =
-                    shuttle_runtime::tracing_subscriber::EnvFilter::try_from_default_env()
-                        .or_else(|_| shuttle_runtime::tracing_subscriber::EnvFilter::try_new("INFO"))
-                        .unwrap();
+                let log_level = shuttle_runtime::tracing::Level::TRACE;
+                let log_level : shuttle_runtime::tracing::Level = match log_level {
+                    level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
+                    level => level,
+                };
+
+                let filter_layer = shuttle_runtime::tracing_subscriber::EnvFilter::from_default_env().add_directive(log_level.into());
 
                 shuttle_runtime::tracing_subscriber::registry()
                     .with(filter_layer)
@@ -427,7 +430,7 @@ mod tests {
                 },
             ],
             fn_return: parse_quote!(ShuttleComplex),
-            log_level: "DEBUG".to_string(),
+            log_level: "INFO".to_string(),
         };
 
         let actual = quote!(#input);
@@ -441,10 +444,13 @@ mod tests {
                 use shuttle_runtime::tracing_subscriber::prelude::*;
                 use shuttle_runtime::{Factory, ResourceBuilder};
 
-                let filter_layer =
-                    shuttle_runtime::tracing_subscriber::EnvFilter::try_from_default_env()
-                        .or_else(|_| shuttle_runtime::tracing_subscriber::EnvFilter::try_new("INFO"))
-                        .unwrap();
+                let log_level = shuttle_runtime::tracing::Level::INFO;
+                let log_level : shuttle_runtime::tracing::Level = match log_level {
+                    level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
+                    level => level,
+                };
+
+                let filter_layer = shuttle_runtime::tracing_subscriber::EnvFilter::from_default_env().add_directive(log_level.into());
 
                 shuttle_runtime::tracing_subscriber::registry()
                     .with(filter_layer)
@@ -541,7 +547,7 @@ mod tests {
                 },
             }],
             fn_return: parse_quote!(ShuttleComplex),
-            log_level: "DEBUG".to_string(),
+            log_level: "ERROR".to_string(),
         };
 
         input.fn_inputs[0]
@@ -566,10 +572,13 @@ mod tests {
                 use shuttle_runtime::tracing_subscriber::prelude::*;
                 use shuttle_runtime::{Factory, ResourceBuilder};
 
-                let filter_layer =
-                    shuttle_runtime::tracing_subscriber::EnvFilter::try_from_default_env()
-                        .or_else(|_| shuttle_runtime::tracing_subscriber::EnvFilter::try_new("INFO"))
-                        .unwrap();
+                let log_level = shuttle_runtime::tracing::Level::ERROR;
+                let log_level : shuttle_runtime::tracing::Level = match log_level {
+                    level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
+                    level => level,
+                };
+
+                let filter_layer = shuttle_runtime::tracing_subscriber::EnvFilter::from_default_env().add_directive(log_level.into());
 
                 shuttle_runtime::tracing_subscriber::registry()
                     .with(filter_layer)
