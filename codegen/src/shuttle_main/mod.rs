@@ -203,9 +203,8 @@ fn attribute_to_builder(pat_ident: &PatIdent, attrs: Vec<Attribute>) -> syn::Res
 impl ToTokens for Loader {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let fn_ident = &self.fn_ident;
-        let log_level = &self.log_level;
 
-        let log_level = match log_level.as_str() {
+        let log_level = match self.log_level.as_str() {
             "TRACE" | "trace" => quote! { shuttle_runtime::tracing::Level::TRACE },
             "DEBUG" | "debug" => quote! { shuttle_runtime::tracing::Level::DEBUG },
             "INFO" | "info" => quote! { shuttle_runtime::tracing::Level::INFO },
@@ -287,9 +286,7 @@ impl ToTokens for Loader {
                 use shuttle_runtime::tracing_subscriber::prelude::*;
                 #extra_imports
 
-                let log_level = #log_level;
-
-                let log_level: shuttle_runtime::tracing::Level = match log_level {
+                let log_level: shuttle_runtime::tracing::Level = match #log_level {
                     level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
                     level => level,
                 };
@@ -358,8 +355,7 @@ mod tests {
                 use shuttle_runtime::Context;
                 use shuttle_runtime::tracing_subscriber::prelude::*;
 
-                let log_level = shuttle_runtime::tracing::Level::TRACE;
-                let log_level : shuttle_runtime::tracing::Level = match log_level {
+                let log_level : shuttle_runtime::tracing::Level = match shuttle_runtime::tracing::Level::TRACE {
                     level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
                     level => level,
                 };
@@ -444,8 +440,7 @@ mod tests {
                 use shuttle_runtime::tracing_subscriber::prelude::*;
                 use shuttle_runtime::{Factory, ResourceBuilder};
 
-                let log_level = shuttle_runtime::tracing::Level::INFO;
-                let log_level : shuttle_runtime::tracing::Level = match log_level {
+                let log_level : shuttle_runtime::tracing::Level = match shuttle_runtime::tracing::Level::INFO {
                     level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
                     level => level,
                 };
@@ -572,8 +567,7 @@ mod tests {
                 use shuttle_runtime::tracing_subscriber::prelude::*;
                 use shuttle_runtime::{Factory, ResourceBuilder};
 
-                let log_level = shuttle_runtime::tracing::Level::ERROR;
-                let log_level : shuttle_runtime::tracing::Level = match log_level {
+                let log_level : shuttle_runtime::tracing::Level = match shuttle_runtime::tracing::Level::ERROR {
                     level if level < shuttle_runtime::tracing::Level::DEBUG => shuttle_runtime::tracing::Level::DEBUG,
                     level => level,
                 };
